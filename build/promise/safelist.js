@@ -1,3 +1,4 @@
+const Twitter = require("twitter");
 const Fs = require("fs");
 const Log = require("../log");
 
@@ -47,7 +48,7 @@ class SafeListPromise extends Object {
             safeListTable[id] = 0;
             count++;
           }
-          Log.n(`Copied IDs. Total: ${ count }`);
+          Log.n(`IDs to be excluded has loaded. Total: ${ count }`);
           resolve(safeListTable);
         } else {
           reject(safeListTable);

@@ -80,6 +80,7 @@ class BirdClient {
     parser.addArgument(["-s", "--safelist"], { help : "Load 'safe list(which may contains list of twitter IDs, not screen names)' from file"})
     parser.addArgument(["-g", "--generate-safelist"], { help : "Generate safelist file and exit", action: "storeTrue"  })
     parser.addArgument(["-c", "--config"], { help : "Pass twitter token configuration file name (JSON)" })
+    parser.addArgument(["-C", "--cursor"], { help : "Start from given cursor, if previous operation was stopped accidentally. (Default: -1)", default: "-1" })
 
     let parsedArgs: Object = parser.parseArgs()
     let safeListPromise: SafeListPromise = new SafeListPromise()
@@ -138,7 +139,7 @@ class BirdClient {
 
         Log.n("Sanity check is okay")
 
-        this.fetchList(listSource, parsedArgs.username)
+        this.fetchList(listSource, parsedArgs.username, parsedArgs.cursor)
       })
     }
     else {
