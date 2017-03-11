@@ -15,6 +15,7 @@ const ENV_TWITTER_TOKEN_NAMES:Object = {
   "BIRD_MY_SCREEN_NAME" : "my_screen_name"
 }
 
+
 class Config extends Object {
   consumer_key:string
   consumer_secret:string
@@ -77,7 +78,7 @@ class SafeListPromises extends Object {
     })
   }
 
-  fetchFromTwitterProfile(client:Twitter, fromScreenName:string) : Promise<*> {
+  fetchFromTwitterProfile(client:Twitter, fromScreenName: string) : Promise<*> {
     return new Promise(function(resolve, reject) {
       Log.n("Fetching friends of your twitter account to create SafeList")
 
@@ -102,124 +103,142 @@ class SafeListPromises extends Object {
   }
 }
 
-function main(args: Array<string>): void {
-  let parser: Argparse.ArgumentParser =
-   new Argparse.ArgumentParser(
-     {  version: '0.0.1', addHelp:true, description: 'Blocks harmful twitter and twitters'})
-  parser.addArgument(["-f", "--friends"], { help : "Block friends(followings) of given user", action: "storeTrue" })
-  parser.addArgument(["-F", "--followers"], { help : "Block followers of given user", action: "storeTrue" })
-  parser.addArgument(["-u", "--username"], { help : "Pass @username to be targeted" })
-  parser.addArgument(["-s", "--safelist"], { help : "Load 'safe list(which may contains list of twitter IDs, not screen names)' from file"})
-  parser.addArgument(["-g", "--generate-safelist"], { help : "Generate safelist file and exit", action: "storeTrue"  })
-  parser.addArgument(["-c", "--config"], { help : "Pass twitter token configuration file name (JSON)" })
+class BirdClient {
+  client: Twitter
+  config: Config
+  progressIndicator: Progress
+  safeList: Object
 
-  let parsedArgs: Object = parser.parseArgs()
-  let safeList: SafeListPromises = new SafeListPromises()
-  var config: Config = new Config()
-  Log.n("Processing arguments")
-
-  if (parsedArgs.config) {
-    let configFile = (parsedArgs.config:string)
-    let jsonConfigData = JSON.parse(Fs.readFileSync(configFile, "utf-8"))
-    for (let jsonConfigKey in jsonConfigData) {
-      config[jsonConfigKey] = jsonConfigData[jsonConfigKey]
-    }
-  }
-  else {
-    // Obtain information from Environment variables
-    for (let envname:string in ENV_TWITTER_TOKEN_NAMES) {
-      config[ENV_TWITTER_TOKEN_NAMES[envname]] = process.env[envname]
-    }
+  constructor() {
+    this.progressIndicator = new Progress("Blocking :current/:total [:bar]", { total: 0, width: 80 })
   }
 
-  let preparationPromises: Array<Promise<*>> = []
+  doBlock(dequeuer: Function): void {
+    let targetUserId: string = dequeuer()
 
-  if (config.isConfigured()) {
-    let client: Twitter = new Twitter(config)
+    this.client.post("/blocks/create", {user_id : targetUserId, skip_status: "true", include_entities: "false" })
+      .then((error, data, response) => {
+        this.progressIndicator.tick();
 
-    if (parsedArgs.safelist) {
-      preparationPromises.push(safeList.loadFile(parsedArgs.safelist))
-    }
-    else {
-      preparationPromises.push(safeList.fetchFromTwitterProfile(client, config.my_screen_name))
-    }
-
-    Promise.all(preparationPromises).then((values)=> {
-      Log.n("Completed")
-
-      let safeList: Object = values[0]
-      let listSource: string = ""
-
-      if (parsedArgs.followers === true) {
-        listSource = "/followers/ids"
-      }
-      else if (parsedArgs.friends === true) {
-        listSource = "/friends/ids"
-      }
-      else {
-        Log.e("Please target followers or friends(following)")
-        process.exit(-1)
-      }
-
-      if (parsedArgs.username == "" || parsedArgs.username === config.my_screen_name) {
-        Log.e("For safety, passing same as my_screen_name or blank username is prohibited.")
-        process.exit(-1)
-      }
-
-      Log.n("Sanity check is okay")
-      client.get(listSource, {screen_name: parsedArgs.username, stringify_ids: true}, (error, data, response) => {
-        if (error) {
-          Log.e(`Error occured! ${JSON.stringify(error)}`)
-          return
-        }
-
-        Log.n("Will prepare for punishment")
-
-        const MAX_REQUEST_SIZE: number = 30
-
-        let progressIndicator: Progress = new Progress("Blocking :current/:total [:bar]", { total: data.ids.length, width: 40 })
-        let targets: Array<string> = data.ids.filter((id_string) => { return !(id_string in safeList) })
-        Log.n("Target length = " + targets.length)
-        console.log(targets)
-        let blockTaskPromise = (id: string):Promise<*> => {
-          return new Promise((resolve, reject) => {
-            if (id === undefined || id === "") {
-              reject(false)
-              return
-            }
-
-            // Promise chaining
-            client.post("/blocks/create", {user_id : id })
-                  .then((error) => {
-                    progressIndicator.tick()
-                    setTimeout(() => { resolve(true) }, 300)
-                  })
-                  .catch((error) => {
-                    Log.e(error + ":" + id)
-                    reject(false)
-                  })
-          })
-        }
-
-        if (targets.length > 0) {
-          let promise: Promise<*> = blockTaskPromise(targets.shift())
-          for  (let i=0; i < targets.length; i++) {
-            promise = promise.then(() => { blockTaskPromise(targets.shift()) })
-          }
-        }
+        this.doBlock(dequeuer)
       })
+      .catch((e) => {
+        Log.e(`Error caught while blocking ${targetUserId} : ${e.toString()}`)
+
+        this.doBlock(dequeuer)
+      })
+  }
+
+  fetchList(sourceAPI: string, fromScreenName: string, cursorNumString: string = "-1"): void {
+    let params: Object = {screen_name: fromScreenName, stringify_ids: true, cursor: cursorNumString}
+
+    this.client.get(sourceAPI, params, (error, data, response) => {
+      if (error) {
+        Log.e(`Error occurred while fetching IDs: ${JSON.stringify(error)}`)
+        return
+      }
+
+      // If response indicates more page(s), call fetchList again.
+      if (data.next_cursor_str !== "0") {
+        this.fetchList(sourceAPI, fromScreenName, data.next_cursor_str);
+      }
+
+      let targets: Array<string> = data.ids.filter((id_string) => { return !(id_string in this.safeList) })
+      Log.n("Target length = " + targets.length)
+
+      this.progressIndicator.total += targets.length
+
+      let dequeuer: Function = () => { return targets.length > 0 ? targets.shift() : "" }
+
+      if (targets.length > 0) {
+        this.doBlock(dequeuer);
+      }
     })
   }
-  else {
-    Log.e("Bird could not load configuration from neither system environment nor configuration file")
-    Log.e("Here is what Bird got:", JSON.stringify(config))
-    process.exit(-1)
+
+  main(args: Array<string>): void {
+    let parser: Argparse.ArgumentParser =
+     new Argparse.ArgumentParser(
+       {  version: '0.0.1', addHelp:true, description: 'Blocks harmful twitter and twitters'})
+    parser.addArgument(["-f", "--friends"], { help : "Block friends(followings) of given user", action: "storeTrue" })
+    parser.addArgument(["-F", "--followers"], { help : "Block followers of given user", action: "storeTrue" })
+    parser.addArgument(["-u", "--username"], { help : "Pass @username to be targeted" })
+    parser.addArgument(["-s", "--safelist"], { help : "Load 'safe list(which may contains list of twitter IDs, not screen names)' from file"})
+    parser.addArgument(["-g", "--generate-safelist"], { help : "Generate safelist file and exit", action: "storeTrue"  })
+    parser.addArgument(["-c", "--config"], { help : "Pass twitter token configuration file name (JSON)" })
+
+    let parsedArgs: Object = parser.parseArgs()
+    let safeListPromise: SafeListPromises = new SafeListPromises()
+    this.config = new Config()
+
+    Log.n("Processing arguments")
+
+    if (parsedArgs.config) {
+      let configFile = (parsedArgs.config:string)
+      let jsonConfigData = JSON.parse(Fs.readFileSync(configFile, "utf-8"))
+      for (let jsonConfigKey in jsonConfigData) {
+        this.config[jsonConfigKey] = jsonConfigData[jsonConfigKey]
+      }
+    }
+    else {
+      // Obtain information from Environment variables
+      for (let envname:string in ENV_TWITTER_TOKEN_NAMES) {
+        this.config[ENV_TWITTER_TOKEN_NAMES[envname]] = process.env[envname]
+      }
+    }
+
+    let preparationPromises: Array<Promise<*>> = []
+
+    if (this.config.isConfigured()) {
+      this.client = new Twitter(this.config)
+
+      if (parsedArgs.safelist) {
+        preparationPromises.push(safeListPromise.loadFile(parsedArgs.safelist))
+      }
+      else {
+        preparationPromises.push(safeListPromise.fetchFromTwitterProfile(this.client, this.config.my_screen_name))
+      }
+
+      Promise.all(preparationPromises).then((values)=> {
+        Log.n("Preparation Completed")
+
+        this.safeList = values[0]
+
+        let listSource: string = ""
+
+        if (parsedArgs.followers === true) {
+          listSource = "/followers/ids"
+        }
+        else if (parsedArgs.friends === true) {
+          listSource = "/friends/ids"
+        }
+        else {
+          Log.e("Please target followers or friends(following)")
+          process.exit(-1)
+        }
+
+        if (parsedArgs.username == "" || parsedArgs.username === this.config.my_screen_name) {
+          Log.e("For safety, passing same as my_screen_name or blank username is prohibited.")
+          process.exit(-1)
+        }
+
+        Log.n("Sanity check is okay")
+
+        this.fetchList(listSource, parsedArgs.username)
+      })
+    }
+    else {
+      Log.e("Bird could not load configuration from neither system environment nor configuration file")
+      Log.e("Here is what Bird got:", JSON.stringify(this.config))
+      process.exit(-1)
+    }
   }
 }
 
+
 // -------------------------------------------
 if (typeof(process.argv) === "object") {
-  main(process.argv)
+  new BirdClient().main(process.argv)
 }
 else {
   Log.e("Please call this program via OS shell.")
