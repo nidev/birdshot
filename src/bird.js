@@ -22,6 +22,7 @@ class BirdClient {
   config: Config
   progressIndicator: Progress
   safeList: Object
+  cursorNumString: string
 
   constructor() {
     this.progressIndicator = new Progress("Blocking :current/:total [:bar]", { total: 0, width: 80 })
@@ -30,14 +31,24 @@ class BirdClient {
   doBlock(dequeuer: Function): void {
     let targetUserId: string = dequeuer()
 
+    if (!targetUserId) {
+      this.doBlock(dequeuer)
+      return
+    }
+
     this.client.post("/blocks/create", {user_id : targetUserId, skip_status: "true", include_entities: "false" })
       .then((error, data, response) => {
         this.progressIndicator.tick();
-
         this.doBlock(dequeuer)
       })
       .catch((e) => {
-        Log.e(`Error caught while blocking ${targetUserId} : ${e.toString()}`)
+        Log.e(`Error caught while blocking ${targetUserId}`)
+        console.log(e)
+
+        if (e instanceof Array && e[0].code == "48") {
+          Log.e(`API Error. Try with '-C ${this.cursorNumString}' or '--cursor ${this.cursorNumString}' later.`)
+          process.exit(-1)
+        }
 
         this.doBlock(dequeuer)
       })
@@ -58,14 +69,15 @@ class BirdClient {
       }
 
       let targets: Array<string> = data.ids.filter((id_string) => { return !(id_string in this.safeList) })
-      Log.n("Target length = " + targets.length)
 
       this.progressIndicator.total += targets.length
+
+      Log.n("Target length = " + targets.length)
 
       let dequeuer: Function = () => { return targets.length > 0 ? targets.shift() : "" }
 
       if (targets.length > 0) {
-        this.doBlock(dequeuer);
+        this.doBlock(dequeuer, data.next_cursor_str);
       }
     })
   }
@@ -139,7 +151,12 @@ class BirdClient {
 
         Log.n("Sanity check is okay")
 
-        this.fetchList(listSource, parsedArgs.username, parsedArgs.cursor)
+        if (parsedArgs.cursor) {
+          this.fetchList(listSource, parsedArgs.username, parsedArgs.cursor)
+        }
+        else {
+          this.fetchList(listSource, parsedArgs.username)
+        }
       })
     }
     else {
