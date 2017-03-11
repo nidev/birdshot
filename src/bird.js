@@ -45,7 +45,7 @@ class BirdClient {
         Log.e(`Error caught while blocking ${targetUserId}`)
         console.log(e)
 
-        if (e instanceof Array && e[0].code == "48") {
+        if (e[0] && e[0].code == "48") {
           Log.e(`API Error. Try with '-C ${this.cursorNumString}' or '--cursor ${this.cursorNumString}' later.`)
           process.exit(-1)
         }
