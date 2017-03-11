@@ -17,14 +17,6 @@ const ENV_TWITTER_TOKEN_NAMES:Object = {
   "BIRD_MY_SCREEN_NAME" : "my_screen_name"
 }
 
-type TypeConfig = {
-  consumer_key:string,
-  consumer_secret:string,
-  access_token_key:string,
-  access_token_secret:string,
-  my_screen_name: string
-}
-
 class BirdClient {
   client: Twitter
   config: Config
