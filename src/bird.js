@@ -5,7 +5,9 @@ const Fs = require("fs")
 const Argparse = require("argparse")
 const Progress = require("progress")
 
+const SafeListPromise = require("./promise/safelist");
 const Log = require("./log")
+const Config = require("./config")
 
 const ENV_TWITTER_TOKEN_NAMES:Object = {
   "BIRD_COMSUMER_KEY":"consumer_key",
@@ -15,92 +17,12 @@ const ENV_TWITTER_TOKEN_NAMES:Object = {
   "BIRD_MY_SCREEN_NAME" : "my_screen_name"
 }
 
-
-class Config extends Object {
-  consumer_key:string
-  consumer_secret:string
-  access_token_key:string
-  access_token_secret:string
-  my_screen_name: string
-
-  constructor() { super() }
-
-  isConfigured():bool {
-    return !(
-      (this.consumer_key
-            && this.consumer_secret
-            && this.access_token_key
-            && this.access_token_secret
-            && this.my_screen_name) === undefined
-          )
-  }
-}
-
 type TypeConfig = {
   consumer_key:string,
   consumer_secret:string,
   access_token_key:string,
   access_token_secret:string,
   my_screen_name: string
-}
-
-class SafeListPromises extends Object {
-
-  loadFile(dataFileName: string):Promise<*>{
-    return new Promise((resolve, reject) => {
-      Log.n("Reading SafeList file")
-      Fs.stat(dataFileName, (err, stat: Fs.Stats) => {
-        if (stat.isFile()) {
-          // TODO: read and load
-          Fs.readFile(dataFileName, "utf-8", (error, data) => {
-            Log.n("Read. Parsing now")
-            if (error) {
-              reject(`Error while reading file ${dataFileName} : ${error.toString()}`)
-              return
-            }
-
-            var safeListTable:Object = {}
-            let lines: [string] = data.split(/\s+/)
-            let count = 0
-            for (let line: string of lines) {
-              count++
-              safeListTable[line.replace(/[^0-9]]+/, "")] = 0
-            }
-            Log.n(`Copied IDs. Total: ${count}`)
-            resolve(safeListTable)
-          })
-        }
-        else {
-          reject(`File not exists : ${dataFileName||'null'}`)
-          Log.e(`File not exists : ${dataFileName||'null'}`)
-        }
-      })
-    })
-  }
-
-  fetchFromTwitterProfile(client:Twitter, fromScreenName: string) : Promise<*> {
-    return new Promise(function(resolve, reject) {
-      Log.n("Fetching friends of your twitter account to create SafeList")
-
-      client.get("/friends/ids", {screen_name:fromScreenName,stringify_ids:true}, (error, tweets, response) => {
-        //console.log(error)
-        //console.log(response)
-        var safeListTable: Object = {}
-        if (!error) {
-          let count = 0
-          for (let id of tweets.ids) {
-            safeListTable[id] = 0
-            count++
-          }
-          Log.n(`Copied IDs. Total: ${count}`)
-          resolve(safeListTable)
-        }
-        else {
-          reject(safeListTable)
-        }
-      })
-    })
-  }
 }
 
 class BirdClient {
@@ -168,7 +90,7 @@ class BirdClient {
     parser.addArgument(["-c", "--config"], { help : "Pass twitter token configuration file name (JSON)" })
 
     let parsedArgs: Object = parser.parseArgs()
-    let safeListPromise: SafeListPromises = new SafeListPromises()
+    let safeListPromise: SafeListPromise = new SafeListPromise()
     this.config = new Config()
 
     Log.n("Processing arguments")
