@@ -102,7 +102,7 @@ class SafeListPromises extends Object {
   }
 }
 
-function main(args: [string]): void {
+function main(args: Array<string>): void {
   let parser: Argparse.ArgumentParser =
    new Argparse.ArgumentParser(
      {  version: '0.0.1', addHelp:true, description: 'Blocks harmful twitter and twitters'})
