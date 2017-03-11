@@ -23,6 +23,7 @@ class BirdClient {
   progressIndicator: Progress
   safeList: Object
   cursorNumString: string
+  multipleRunners: number
 
   constructor() {
     this.progressIndicator = new Progress("Blocking :current/:total [:bar]", { total: 0, width: 80 })
@@ -32,7 +33,6 @@ class BirdClient {
     let targetUserId: string = dequeuer()
 
     if (!targetUserId) {
-      this.doBlock(dequeuer)
       return
     }
 
@@ -77,7 +77,10 @@ class BirdClient {
       let dequeuer: Function = () => { return targets.length > 0 ? targets.shift() : "" }
 
       if (targets.length > 0) {
-        this.doBlock(dequeuer, data.next_cursor_str);
+        for (let i = 0; i < this.multipleRunners; i++) {
+          // More execution will create more simultaneously running context.
+          this.doBlock(dequeuer, data.next_cursor_str);
+        }
       }
     })
   }
@@ -93,6 +96,7 @@ class BirdClient {
     parser.addArgument(["-g", "--generate-safelist"], { help : "Generate safelist file and exit", action: "storeTrue"  })
     parser.addArgument(["-c", "--config"], { help : "Pass twitter token configuration file name (JSON)" })
     parser.addArgument(["-C", "--cursor"], { help : "Start from given cursor, if previous operation was stopped accidentally. (Default: -1)", default: "-1" })
+    parser.addArgument(["-x", "--multiplier"], { help : "Send block request with multiple connection. (Default: 4, Max: 32)", default: "4" })
 
     let parsedArgs: Object = parser.parseArgs()
     let safeListPromise: SafeListPromise = new SafeListPromise()
@@ -151,12 +155,34 @@ class BirdClient {
 
         Log.n("Sanity check is okay")
 
+        this.multipleRunners = 2;
+
+        if (parsedArgs.multiplier) {
+          try {
+            this.multipleRunners = Number.parseInt(parsedArgs.multiplier)|0
+
+            if (this.multipleRunners <  4 && this.multipleRunners > 32) {
+              throw "Minimum multiplier is 4 and also Do not exceed 32.";
+            }
+          }
+          catch (e) { Log.e(e) }
+        }
+
+        let cursor: number = -1;
+
         if (parsedArgs.cursor) {
-          this.fetchList(listSource, parsedArgs.username, parsedArgs.cursor)
+          try {
+            cursor = Number.parseInt(parsedArgs.cursor)|0
+
+            if (cursor < 0) {
+              throw "No negative number";
+            }
+          }
+          catch (e) {}
         }
-        else {
-          this.fetchList(listSource, parsedArgs.username)
-        }
+
+        Log.n(`Execution context set up. Task multiplier x${this.multipleRunners}`)
+        this.fetchList(listSource, parsedArgs.username, cursor.toString())
       })
     }
     else {
