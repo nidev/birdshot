@@ -1,4 +1,5 @@
 // @flow
+const Twitter = require("twitter")
 const Fs = require("fs")
 const Log = require("../log")
 
@@ -18,7 +19,7 @@ class SafeListPromise extends Object {
             }
 
             var safeListTable:Object = {}
-            let lines: [string] = data.split(/\s+/)
+            let lines: Array<string> = data.split(/\s+/)
             let count = 0
             for (let line: string of lines) {
               count++
@@ -50,7 +51,7 @@ class SafeListPromise extends Object {
             safeListTable[id] = 0
             count++
           }
-          Log.n(`Copied IDs. Total: ${count}`)
+          Log.n(`IDs to be excluded has loaded. Total: ${count}`)
           resolve(safeListTable)
         }
         else {
