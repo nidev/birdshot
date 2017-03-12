@@ -1,5 +1,8 @@
 # birdShot
-Shot a stone(or tons of stones) to hazardous 'birds' on Twitter. Don't waste your time and energy on social network trolls.
+
+![Working demonstration with animated GIF](https://github.com/nidev/birdshot/raw/master/web/demonstration.gif)
+
+Shot a stone(or tons of stones) to hazardous 'birds' on Twitter, with simple command line. Don't waste your time and energy on social network trolls.
 
 ## Build
 After git clone,
@@ -21,6 +24,16 @@ $ node build/bird.js -c runconfig.json -u Someone_Here -f
 * Blocks followers of Someone_Here
 ```!shell
 $ node build/bird.js -c runconfig.json -u Someone_Here -F
+```
+
+* Using multiplier(-x N) makes blocking faster than past
+```!shell
+$ node build/bird.js -c runconfig.json -u Someone_Here -x 16 -F
+```
+
+* Resuming from where you stopped due to API limit (-c or --cursor option)
+```!shell
+$ node build/bird.js -c runconfig.json -u Someone_Here -x 16 -F -c 238382193232990
 ```
 
 ## 'SafeList' Feature
