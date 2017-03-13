@@ -5,7 +5,7 @@ const Fs = require("fs")
 const Argparse = require("argparse")
 const Progress = require("progress")
 
-const SafeListPromise = require("./promise/safelist");
+const SafeListPromise = require("./promise/safelist")
 const Log = require("./log")
 const Config = require("./config")
 
@@ -38,7 +38,7 @@ class BirdClient {
 
     this.client.post("/blocks/create", {user_id : targetUserId, skip_status: "true", include_entities: "false" })
       .then((error, data, response) => {
-        this.progressIndicator.tick();
+        this.progressIndicator.tick()
         this.doBlock(dequeuer)
       })
       .catch((e) => {
@@ -65,7 +65,7 @@ class BirdClient {
 
       // If response indicates more page(s), call fetchList again.
       if (data.next_cursor_str !== "0") {
-        this.fetchList(sourceAPI, fromScreenName, data.next_cursor_str);
+        this.fetchList(sourceAPI, fromScreenName, data.next_cursor_str)
       }
 
       let targets: Array<string> = data.ids.filter((id_string) => { return !(id_string in this.safeList) })
@@ -79,7 +79,7 @@ class BirdClient {
       if (targets.length > 0) {
         for (let i = 0; i < this.multipleRunners; i++) {
           // More execution will create more simultaneously running context.
-          this.doBlock(dequeuer, data.next_cursor_str);
+          this.doBlock(dequeuer, data.next_cursor_str)
         }
       }
     })
@@ -155,27 +155,27 @@ class BirdClient {
 
         Log.n("Sanity check is okay")
 
-        this.multipleRunners = 2;
+        this.multipleRunners = 2
 
         if (parsedArgs.multiplier) {
           try {
             this.multipleRunners = Number.parseInt(parsedArgs.multiplier)|0
 
             if (this.multipleRunners <  4 && this.multipleRunners > 32) {
-              throw "Minimum multiplier is 4 and also Do not exceed 32.";
+              throw "Minimum multiplier is 4 and also Do not exceed 32."
             }
           }
           catch (e) { Log.e(e) }
         }
 
-        let cursor: number = -1;
+        let cursor: number = -1
 
         if (parsedArgs.cursor) {
           try {
             cursor = Number.parseInt(parsedArgs.cursor)|0
 
             if (cursor < 0) {
-              throw "No negative number";
+              throw "No negative number"
             }
           }
           catch (e) {}
