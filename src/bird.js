@@ -72,7 +72,7 @@ class BirdClient {
 
       this.progressIndicator.total += targets.length
 
-      Log.n("Target length = " + targets.length)
+      Log.n(`Appended ${targets.length} target(s), ${data.ids.length - targets.length} excluded by safelist`)
 
       let dequeuer: Function = () => { return targets.length > 0 ? targets.shift() : "" }
 
