@@ -60,6 +60,7 @@ class BirdClient {
     this.client.get(sourceAPI, params, (error, data, response) => {
       if (error) {
         Log.e(`Error occurred while fetching IDs: ${JSON.stringify(error)}`)
+        Log.e(`You may re-run birdShot with option '--cursor ${cursorNumString}`)
         return
       }
 
